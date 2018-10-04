@@ -63,7 +63,7 @@ class Analyze:
 		finally:
 			return msg 
 
-	def _convert_to_audio(self, wav_bytes: str, filename="command.wav") -> speech.AudioFile:
+	def _convert_to_audio(self, wav_bytes: str, filename="command.wav") -> speech.AudioData:
 		'''
 			For now, inefficiently convert 
 			raw bytes into wav file
@@ -88,7 +88,7 @@ class Analyze:
 
 		return audio 
 	
-	def _convert_to_text(self, audio: speech.AudioFile) -> str:
+	def _convert_to_text(self, audio: speech.AudioData) -> str:
 		'''
 		audio: speech_recognition.AudioFile
 
