@@ -11,52 +11,50 @@ self.frames : list -> deque
 import wave
 import time
 import socket
+import audioop
 import pyaudio
+import collections
 import numpy as np
 from queue import Queue
 from model import TModel
 from sample import Sample
 from threading import Thread
 
-frames = []
-ip_port = ("127.0.0.1", 30002)
-
 class Listen:
-	host = ""
-	port = 30002
+	host = "192.168.0.108"
+	port = 30001
 	def __init__(self,p,stream,form=pyaudio.paInt16,chunk=1024*2,channels=2,
-			rate=44100,shift_bytes=275, rate=16000, 
-			threshold=2500, silence_limit=1, prev_audio_limit = 0.5):
+			shift_bytes=275, rate=16000, 
+			threshold=0, silence_limit=1, prev_audio_limit = 0.5):
 		self.p = p
 		self.stream = stream
 		self.form = form
 		self.chunk = chunk
 		self.channels = channels
 		self.rate = rate
-		self.rel = self.rate/self.chunk
+		self.rel = self.rate//self.chunk
 		self.threshold = threshold
 		self.silence_limit = silence_limit
 		self.prev_audio_limit = prev_audio_limit
 		self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		self.s.bind((self.host, self.port))
+		self.s.connect((self.host, self.port))
 		self.q = Queue()
-		self.frames = []
+		self.save_second = 5
+		self.frames = collections.deque(maxlen=self.rel*self.save_second)
 		self.saved = False
 		self.shift_bytes = shift_bytes
 		self.closed = False
 
-	def _close(self):
-		print("Closing the socket")
-		self.closed = True
-		self.s.close()
-	
-	def _send(msg):
-		self.con.send(msg)
+	def _send(self, msg):
+		if isinstance(msg, str):
+			msg = msg.encode()
+		print(f"Sending {msg}")
+		self.s.send(msg)
 
 	def record(self):    
 	    while True:
-	        self.frames.append(stream.read(self.chunk))
+	        self.frames.append(b"\x11")#stream.read(self.chunk))
 
 
 	def save(self,remove=True,filename="test.wav"):
@@ -71,8 +69,6 @@ class Listen:
 			wf.setframerate(self.rate)
 			print("Saving bytes {}".format(len(self.frames)),end="\r")
 			wf.writeframes(b''.join(self.frames))
-		if remove:
-			self.frames = self.frames[self.shift_bytes:]
 		print(f"Frames length is now {len(self.frames)}")
 		self.saved=True
 
@@ -103,29 +99,35 @@ class Listen:
 			trigger word has been detected 
 		'''
 		msg = "RPi"
-		self.send(msg.encode())
+		self._send(msg)
+		time.sleep(2)
 		#Now listen for the command and send the audio raw bytes
 		self.listen_for_command()
 	
 	def listen_for_command(self):
 		audio2send = []
-		check_thresh = deque(maxlen=self.rel*self.silence_limit)
-		prev_audio = deque(maxlen=self.rel*self.prev_audio_limit)
+		check_thresh = collections.deque(maxlen=self.rel*self.silence_limit)
+		prev_audio = collections.deque(maxlen=int(self.rel*self.prev_audio_limit))
 		started = False
+		later = False
+		send_later = b"\x00"
+		send_now = b"\x11"
 		while True:
-			current_audio = self.stream.read(chunk)
+			if not later:
+				current_audio = send_now*4#self.stream.read(chunk)
+			else:
+				current_audio = send_later*4
 			check_thresh.append(np.sqrt(np.abs(audioop.avg(current_audio, 4))))
-			if sum((i>self.threshold for i in check_thresh) > 0):
+			if sum([i>self.threshold for i in check_thresh]) > 0:
 				audio2send.append(current_audio)
 				started = True
 			elif started:
-				msg = "Command "
-				for i in list(prev_audio)+audio2send:
-					msg += i
-				self.send(msg)
+				msg = b"Command " + b"".join(list(prev_audio) + audio2send)
+				self._send(msg)
 				break
 			else:
 				prev_audio.append(current_audio)
+			later = True
 
 
 class Evaluate:
@@ -166,26 +168,31 @@ class Evaluate:
 
 def start_threads(l,e):
 	print("Creating and starting threads")
-	tPlay = Thread(target = l.play)
+	tPlay = Thread(target = l.record)
 	tStop = Thread(target=l.stop)
-	tAnalyze = Thread(target=e.continuously_analyze)
+	tSend = Thread(target=l.send_command)
+	#tAnalyze = Thread(target=e.continuously_analyze)
 	tPlay.start()
 	tStop.start()
-	tAnalyze.start()
+	tSend.start()
+	#tAnalyze.start()
+	tSend.join()
+	tSend = Thread(target=l.send_command)
+	tSend.start()
 
 if __name__ == "__main__":
 	
-	form,channels,rate,chunk = pyaudio.paInt16,2,44100,1024*2
+	form,channels,rate,chunk = pyaudio.paInt16, 2, 16000, 1024*2
 	p = pyaudio.PyAudio()
 
 	stream = p.open(format=form,
-					channels = channels,
-					rate = rate,
-					output = True,
-					frames_per_buffer = chunk,
-					)
+			channels = channels,
+			rate = rate,
+			input = True,
+			frames_per_buffer = chunk,
+			)
 	print("Initializing",end="\r")
 	l = Listen(p,stream,form,chunk,channels,rate)
-	e = Evaluate(l) 
+	e = None#Evaluate(l) 
 	print("Done!	  ")
 	start_threads(l,e)
