@@ -3,13 +3,17 @@ import time
 import socket
 import pyaudio
 import sqlite3
+import colorama
 import threading
 import numpy as np
 from customWMD import WMD,WordNotFound
 import speech_recognition as speech
 from sklearn.externals.joblib import Parallel, delayed
 
+def _find_command(wmd, user_command, command):
+	distance = wmd.wmd(user_command, command)
 
+	return (distance, command)
 def connect():
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -83,7 +87,7 @@ class Analyze:
 		self.channels = channels
 		self.shift_bytes = shift_bytes
 		self.rate = rate
-		self.conn = sqlite3.connect("Command.db")
+		self.conn = sqlite3.connect("Commands.db")
 		self.curr = self.conn.cursor()
 		self.recognizer = speech.Recognizer()
 		self.wmd = WMD()
@@ -158,10 +162,12 @@ class Analyze:
 		'''
 		returns: all commands from database
 		'''
-		self.curr.execute("SELECT command from commands")
+		self.curr.execute("SELECT * from commands")
 		self.commands = self.curr.fetchall()
+		self.commands = [i[0] for i in self.commands]
 
-	def _find_best(self, user_command: str, n_jobs=10) -> (np.float64, str):
+
+	def _find_best(self, user_command: str, n_jobs=5) -> (np.float64, str):
 		'''
 		user_command: str is the command that user gave as input
 		n_jobs: int for parallelizing
@@ -169,14 +175,13 @@ class Analyze:
 		returns: tuple (wmd calculated, command in the database)
 		'''
 		try:
-			out = Parallel(n_jobs=n_jobs)(delayed(lambda x: (self.wmd.wmd(user_command, x), x)) for command in self.commands)
+			out = Parallel(n_jobs=n_jobs)(delayed(_find_command)(self.wmd, user_command, command) for command in self.commands)
 			out.sort(key = lambda x: x[0])
 		except WordNotFound as e:
 			print(str(e))
 			self._send(str(e))
 		if not isinstance(out, list) or len(out) == 0:
 			return (np.inf, "")
-		print(out)
 		return out[0]
 	
 	def _send(message: str):
@@ -210,7 +215,7 @@ class Analyze:
 				text = self._convert_to_text(audio)
 				print(f"You said: {text} :D")
 				(distance, command) = self._find_best(text)
-
+				print("Closest command to {} {} {} is {} {} {} at a distance of {} {} {} ".format(colorama.Fore.GREEN, text, colorama.Style.RESET_ALL, colorama.Fore.RED, command, colorama.Style.RESET_ALL, colorama.Fore.YELLOW,  distance, colorama.Style.RESET_ALL))
 				#self.perform(command)
 l = dir(Notify) + dir(Analyze)
 def hook(f, *_):
