@@ -174,6 +174,7 @@ class Analyze:
 
 		returns: tuple (wmd calculated, command in the database)
 		'''
+		out = []
 		try:
 			out = Parallel(n_jobs=n_jobs)(delayed(_find_command)(self.wmd, user_command, command) for command in self.commands)
 			out.sort(key = lambda x: x[0])
@@ -184,7 +185,7 @@ class Analyze:
 			return (np.inf, "")
 		return out[0]
 	
-	def _send(message: str):
+	def _send(self, message: str):
 		'''
 			Send a message to RPi
 		'''
@@ -214,12 +215,14 @@ class Analyze:
 				print("Made an audio file :D")
 				text = self._convert_to_text(audio)
 				print(f"You said: {text} :D")
+				if len(text) == 0:
+					continue
 				(distance, command) = self._find_best(text)
 				print("Closest command to {} {} {} is {} {} {} at a distance of {} {} {} ".format(colorama.Fore.GREEN, text, colorama.Style.RESET_ALL, colorama.Fore.RED, command, colorama.Style.RESET_ALL, colorama.Fore.YELLOW,  distance, colorama.Style.RESET_ALL))
 				#self.perform(command)
 l = dir(Notify) + dir(Analyze)
 def hook(f, *_):
-        if f.f_code.co_name in l and f.f_code.co_name != "__init__":
+        if True:#f.f_code.co_name in l and f.f_code.co_name != "__init__":
                 print(f.f_code.co_name)
 import sys
 #sys.setprofile(hook)
