@@ -41,10 +41,10 @@ class Notify:
 	def _send(self, msg):
 		self.con.send(msg)
 
-	def _recv(self, byte=1024, wtf = "Not notify"):
+	def _recv(self, byte=1024):
 		msg = self.con.recv(byte)
-		if isinstance(msg, bytes):
-			msg = msg.decode()
+		#if isinstance(msg, bytes):
+		#	msg = msg.decode()
 		return msg
 
 	def acquire_and_notify(self):
@@ -55,28 +55,27 @@ class Notify:
 			Assuming for now msg starting with `RPi`
 			means RPi has detected a trigger word
 		'''
-
-		try:
-			with main_thread:
-				main_thread.acquire()
-				print("Acquired back again")
-				msg = self._recv(wtf="Notify")
-				print(msg,"in acq and not")
-				print(msg.startswith("RPi"))
-				print("Notifying")
-				main_thread.notify()
-				print("Notified")
-		except socket.error as se:
-			print("Socket error {}".format(se))
-			self._close()
-			#self._connect()
-		except Exception as e:
-			print(str(e))
-			self._close()
+		while True:
+			try:
+				with main_thread:
+					print("Acquired back again")
+					msg = self._recv()
+					print(msg[:3],"in acq and not")
+					print("Notifying")
+					main_thread.notify()
+			except socket.error as se:
+				print("Socket error {}".format(se))
+				self._close()
+				break
+				#self._connect()
+			except Exception as e:
+				print(str(e))
+				self._close()
+			time.sleep(1)
 
 class Analyze:
 	
-	def __init__(self, notify,form=pyaudio.paInt16,chunk=1024*2,channels=2, 
+	def __init__(self, notify,form=pyaudio.paInt16,chunk=1024,channels=1, 
 			shift_bytes=275, rate=16000):
 		self.notify = notify
 		self.form = form
@@ -98,12 +97,15 @@ class Analyze:
 
 			returns: string of bytes received
 		'''
-		msg = ""
+		audio_bytes = b""
 		try:
-			msg = self.notify._recv(1024)
-			check_str, msg = msg.split()
-			if not check_str == "Command":
-				return ""
+			while True:
+				msg = self.notify._recv(1024)
+				if msg.startswith(b"Command "):
+					check_str, msg = msg[:len(b"Command ")], msg[len(b"Command "):]
+					audio_bytes += msg
+				elif msg.endswith(b"End"):
+					break
 		except socket.error as e:
 			print(str(e))
 			self.notify._close()
@@ -111,7 +113,8 @@ class Analyze:
 			print(str(e))
 			self.notify._close()
 		finally:
-			return msg 
+			print("Received {} bytes".format(len(audio_bytes)))
+			return audio_bytes 
 
 	def _convert_to_audio(self, wav_bytes: str, filename="command.wav") -> speech.AudioData:
 		'''
@@ -126,7 +129,6 @@ class Analyze:
 		'''
 		if isinstance(wav_bytes, str):
 			wav_bytes = wav_bytes.encode()
-		print(wav_bytes)
 		with wave.open(filename, 'wb') as wf:
 			wf.setnchannels(self.channels)
 			wf.setsampwidth(self.p.get_sample_size(self.form))
@@ -171,7 +173,9 @@ class Analyze:
 		except WordNotFound as e:
 			print(str(e))
 			self._send(str(e))
-
+		if not isinstance(out, list) or len(out) == 0:
+			return (np.inf, "")
+		print(out)
 		return out[0]
 	
 	def _send(message: str):
@@ -193,20 +197,26 @@ class Analyze:
 		'''
 			function which wakes up when command is given to the user 
 		'''
-		
 		while True:
-			self.notify.acquire_and_notify()
-			print("Acquired")
-			msg = self._get_from_raspberry()
-			print(f"Got {msg} from raspberry")
-			audio = self._convert_to_audio(msg)
-			print("Made an audio file :D")
-			#text = self._convert_to_text(audio)
-			print("Random text :D")
-			#(distance, command) = self._find_best(text)
+			with main_thread:
+				main_thread.wait()
+				print("Notified")
+				msg = self._get_from_raspberry()
+				if len(msg) == 0:
+					continue
+				audio = self._convert_to_audio(msg)
+				print("Made an audio file :D")
+				text = self._convert_to_text(audio)
+				print(f"You said: {text} :D")
+				(distance, command) = self._find_best(text)
 
-			#self.perform(command)
-
+				#self.perform(command)
+l = dir(Notify) + dir(Analyze)
+def hook(f, *_):
+        if f.f_code.co_name in l and f.f_code.co_name != "__init__":
+                print(f.f_code.co_name)
+import sys
+#sys.setprofile(hook)
 if __name__ == "__main__":
 	main_thread = threading.Condition()
 	main_thread.acquire()
