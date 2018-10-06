@@ -100,12 +100,14 @@ class Analyze:
 		audio_bytes = b""
 		try:
 			while True:
-				msg = self.notify._recv(1024)
+				msg = self.notify._recv(4096)
 				if msg.startswith(b"Command "):
 					check_str, msg = msg[:len(b"Command ")], msg[len(b"Command "):]
 					audio_bytes += msg
 				elif msg.endswith(b"End"):
 					break
+				else:
+					audio_bytes += msg
 		except socket.error as e:
 			print(str(e))
 			self.notify._close()
@@ -113,7 +115,6 @@ class Analyze:
 			print(str(e))
 			self.notify._close()
 		finally:
-			print("Received {} bytes".format(len(audio_bytes)))
 			return audio_bytes 
 
 	def _convert_to_audio(self, wav_bytes: str, filename="command.wav") -> speech.AudioData:

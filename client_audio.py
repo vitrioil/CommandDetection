@@ -22,7 +22,7 @@ class Listen:
 	port = 30001
 	def __init__(self, form=pyaudio.paInt16,chunk=1024,channels=1,
 			shift_bytes=275, rate=16000, 
-			threshold=2000, silence_limit=1, prev_audio_limit = 0.5):
+			threshold=2500, silence_limit=1, prev_audio_limit = 0.5):
 		self.form = form
 		self.chunk = chunk
 		self.channels = channels
@@ -37,12 +37,12 @@ class Listen:
 		self.q = Queue()
 		self.p = pyaudio.PyAudio()
 		self.stream = self.p.open(format=self.form,
-			channels = self.channels,
-			rate = self.rate,
-			input = True,
-			frames_per_buffer = self.chunk,
-			)
-		self.save_second = 10
+					channels = self.channels,
+					rate = self.rate,
+					input = True,
+					frames_per_buffer = self.chunk,
+					)
+		self.save_second = 1000
 		self.frames = collections.deque(maxlen=self.rel*self.save_second)
 		self.saved = False
 		self.shift_bytes = shift_bytes
@@ -103,8 +103,11 @@ class Listen:
 	
 	def detected(self):
 		while True:
+			print("Detected a trigger word")
+			self.frames.clear()
 			self.send_command()
-			time.sleep(5)
+			time.sleep(2)
+
 
 	def send_command(self):
 		'''
@@ -113,7 +116,6 @@ class Listen:
 		'''
 		msg = "RPi"
 		self._send(msg)
-		time.sleep(2)
 		#Now listen for the command and send the audio raw bytes
 		self.listen_for_command()
 	
@@ -121,7 +123,6 @@ class Listen:
 		audio2send = []
 		check_thresh = collections.deque(maxlen=self.rel*self.silence_limit)
 		prev_audio = collections.deque(maxlen=int(self.rel*self.prev_audio_limit))
-		print(self.rel*self.silence_limit,"||||", self.rel*self.prev_audio_limit)
 		started = False
 		while True:
 			while len(self.frames) == 0:
@@ -132,10 +133,8 @@ class Listen:
 				audio2send.append(current_audio)
 				started = True
 			elif started:
-				print("Sending {} bytes".format(len(list(prev_audio)+audio2send)))
 				msg = b"Command " + b"".join(list(prev_audio) + audio2send)
 				self._send(msg)
-				time.sleep(1)
 				self._send(b"End")
 				break
 			else:
