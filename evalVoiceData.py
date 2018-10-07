@@ -1,6 +1,7 @@
 import wave
 import time
 import socket
+import audioop
 import pyaudio
 import sqlite3
 import colorama
@@ -43,6 +44,9 @@ class Notify:
 		self.con.close()
 	
 	def _send(self, msg):
+		if isinstance(msg, str):
+			msg = msg.encode()
+		print("Sending {}".format(msg))
 		self.con.send(msg)
 
 	def _recv(self, byte=1024):
@@ -141,9 +145,13 @@ class Analyze:
 			wf.writeframes(wav_bytes)
 
 		audio_file = speech.AudioFile(filename)
-		with audio_file as source:
-			audio = self.recognizer.listen(source)
 
+		with audio_file as source:
+			try:
+				audio = self.recognizer.listen(source)
+			except audioop.error as e:
+				print(str(e))
+				return None
 		return audio 
 	
 	def _convert_to_text(self, audio: speech.AudioData) -> str:
@@ -210,12 +218,17 @@ class Analyze:
 				print("Notified")
 				msg = self._get_from_raspberry()
 				if len(msg) == 0:
+					self._send("Didn't receive any command")
 					continue
 				audio = self._convert_to_audio(msg)
+				if audio is None:
+					self._send("Sorry! Audio byte stream issue could you say that again please?")
+					continue
 				print("Made an audio file :D")
 				text = self._convert_to_text(audio)
 				print(f"You said: {text} :D")
 				if len(text) == 0:
+					self._send("Couldn't convert it into text! Can you repeat?")
 					continue
 				(distance, command) = self._find_best(text)
 				print("Closest command to {} {} {} is {} {} {} at a distance of {} {} {} ".format(colorama.Fore.GREEN, text, colorama.Style.RESET_ALL, colorama.Fore.RED, command, colorama.Style.RESET_ALL, colorama.Fore.YELLOW,  distance, colorama.Style.RESET_ALL))

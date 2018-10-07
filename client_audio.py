@@ -22,7 +22,7 @@ class Listen:
 	port = 30001
 	def __init__(self, form=pyaudio.paInt16,chunk=1024,channels=1,
 			shift_bytes=275, rate=16000, 
-			threshold=2500, silence_limit=1, prev_audio_limit = 0.5):
+			threshold=3500, silence_limit=1, prev_audio_limit = 0.5):
 		self.form = form
 		self.chunk = chunk
 		self.channels = channels
@@ -57,6 +57,17 @@ class Listen:
 		if isinstance(msg, str):
 			msg = msg.encode()
 		self.s.send(msg)
+	
+	def _receive(self, byte=1024):
+		msg = self.s.recv(byte)
+		if isinstance(msg, bytes):
+			msg = msg.decode()
+		return msg
+
+	def receive(self):
+		while True:
+			msg = self._receive()
+			print("\n", msg)
 
 	def save(self,remove=True,filename="test.wav"):
 		'''
@@ -129,7 +140,8 @@ class Listen:
 				pass
 			current_audio = self.frames.pop()#self.stream_record()
 			check_thresh.append(np.sqrt(np.abs(audioop.avg(current_audio, 4))))
-			if sum([i>self.threshold for i in check_thresh]) > 0:
+			val = sum([i>self.threshold for i in check_thresh]) 
+			if val > 0:
 				audio2send.append(current_audio)
 				started = True
 			elif started:
@@ -182,10 +194,12 @@ def start_threads(l,e):
 	tRecord = Thread(target=l.record)
 	tStop = Thread(target=l.stop)
 	tSend = Thread(target=l.detected)
+	tReceive = Thread(target=l.receive) 
 	#tAnalyze = Thread(target=e.continuously_analyze)
 	tRecord.start()
 	tStop.start()
 	tSend.start()
+	tReceive.start()
 	#tAnalyze.start()
 
 li = list(dir(Listen)) + list(dir(Evaluate))
