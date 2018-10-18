@@ -56,7 +56,7 @@ class Sample:
 				return True
 		return False
 
-	def insert_audio(self, background: AudioSegment , segments: list, audio: AudioSegment) -> (AudioSegment, , list, bool):
+	def insert_audio(self, background: AudioSegment , segments: list, audio: AudioSegment) -> (AudioSegment, list, list, bool):
 		'''
 			Finds an empty interval to insert audio 
 			into a background audio file, if no such
@@ -71,6 +71,7 @@ class Sample:
 			returns a tuple of 
 			background: AudioSegment, An audio file overlayed with the given audio file
 			interval: list, List of given intervals of audio file
+			segments: list, updated input
 			bool: A boolean implying the given audio is added into background 
 				file or it couldn't find an interval 
 		'''
