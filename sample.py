@@ -1,3 +1,4 @@
+import h5py
 import time
 import numpy as np
 from td_utils import *
@@ -11,17 +12,27 @@ class Sample:
 	Ty = 1375 
 	bg_len = 10_000
 	logdir = "../data/"
-	locTrain = "{logdir}/Training/array/"
-	locTest = "{logdir}/Test/array/"
-	def __init__(self, posPath, negPath, bgPath, pos_answer_len=50, train_size=100, test_size=30, saved=False):
+	locTrain = f"{logdir}/Training/array/"
+	locTest = f"{logdir}/Test/array/"
+	def __init__(self, posPath, negPath, bgPath, pos_answer_len=50,
+			train_size=100, test_size=30, saved=False):
 		self.posPath = posPath
 		self.negPath = negPath
 		self.bgPath = bgPath
 		if not saved:
-			self.activates,self.negatives,self.bg = load_raw_audio(self.posPath,self.negPath,self.bgPath)
+			self.activates,self.negatives,self.bg = load_raw_audio(
+								self.posPath,self.negPath,self.bgPath
+							)
 			self.pos_answer_len = pos_answer_len
 			self.train_size = train_size//len(self.bg)
 			self.test_size = test_size//len(self.bg)
+			self.h5_file = h5py.File("dataset", 'w')
+			self.train_group = self.h5_file.create_group("training")
+			self.test_group = self.h5_file.create_group("test") 
+			self.X_train = self.train_group.create_dataset("X_train", shape = (self.train_size, self.Tx, self.freq))
+			self.X_test = self.test_group.create_dataset("X_test", shape = (self.test_size, self.Tx, self.freq))
+			self.Y_train = self.train_group.create_dataset("Y_train", shape = (self.train_size, self.Ty))
+			self.Y_test = self.test_group.create_dataset("Y_test", shape = (self.test_size, self.Ty))
 
 	def assign_seg(self,interval_length: int) -> (int, int):
 		'''
@@ -52,7 +63,7 @@ class Sample:
 		if segments == []:
 			return False
 		for seg in segments:
-			if data[0] <= seg[1] and data[1] >= seg[0]: 
+			if interval[0] <= seg[1] and interval[1] >= seg[0]: 
 				return True
 		return False
 
@@ -105,7 +116,7 @@ class Sample:
 				y[0,i] = 1
 		return y
 
-	def create_one_example(self, background: AudioSegment, num: int, train = True) -> np.ndarray, np.ndarray:
+	def create_one_example(self, background: AudioSegment, num: int, train = True) -> (np.ndarray, np.ndarray):
 		'''
 			Creates one training sample from a given background audio
 			This function samples audio files from recordings 
@@ -146,7 +157,7 @@ class Sample:
 		background = match_target_amplitude(background,-20)
 		folder = "Training" if train else "Test"
 		name = "train" if train else "test"
-		location = f"{logdir}/{folder}/raw/{name}{num}.wav"#f"../Data/{folder}/raw/{name}{num}.wav"
+		location = f"{self.logdir}/{folder}/raw/{name}{num}.wav"#f"../Data/{folder}/raw/{name}{num}.wav"
 		_ = background.export(location,format="wav")
 		print(f"{location} saved!",end="\r")
 		x = graph_spectrogram(location)
@@ -168,8 +179,8 @@ class Sample:
 		for bg in self.bg:
 			for i in range(self.train_size):
 				x,y = self.create_one_example(bg,num)
-				X_train = np.concatenate((X_train,x[np.newaxis,...]),axis=0)
-				Y_train = np.concatenate((Y_train,y),axis=0)
+				self.X_train[i, :, :]  = x
+				self.Y_train[i, :]  = y
 				num += 1
 		print()
 		print("Training set was made")
@@ -179,29 +190,18 @@ class Sample:
 		for bg in self.bg:
 			for i in range(self.test_size):
 				x,y = self.create_one_example(bg,num,train=False)
-				X_test = np.concatenate((X_test,x[np.newaxis,...]),axis=0)
-				Y_test = np.concatenate((Y_test,y),axis=0)
+				self.X_test[i, :, :] = x
+				self.Y_test[i, :] = y
 				num += 1
 		print()
 		print("Testing set was made")
-		if save:
-			np.save(self.locTrain+"X_train.npy",X_train)
-			np.save(self.locTrain+"Y_train.npy",Y_train[...,np.newaxis])
-			np.save(self.locTest+"X_test.npy",X_test)
-			np.save(self.locTest+"Y_test.npy",Y_test[...,np.newaxis])
-			print("Arrays were saved")
 		return X_train,Y_train,X_test,Y_test
 
 	def load_dataset(self):
-		X_train = np.load(self.locTrain+"X_train.npy")
-		Y_train = np.load(self.locTrain+"Y_train.npy")
-		X_test  = np.load(self.locTest+"X_test.npy")
-		Y_test  = np.load(self.locTest+"Y_test.npy")
-		return X_train,Y_train,X_test,Y_test
-
+		pass
 if __name__ == '__main__':
 	pos = "../data/Pos/"
-	neg = "../data/Neg/"
+	neg = "../data/Pos/"
 	bg =  "../data/BG/"
 	s = Sample(pos,neg,bg,train_size=200,test_size=60)
 	s.make_data_set()
