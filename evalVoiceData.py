@@ -2,11 +2,13 @@ import wave
 import time
 import socket
 import audioop
+import command
 import pyaudio
 import sqlite3
 import colorama
 import threading
 import numpy as np
+from command import *
 from customWMD import WMD,WordNotFound
 import speech_recognition as speech
 from sklearn.externals.joblib import Parallel, delayed
@@ -84,8 +86,10 @@ class Notify:
 class Analyze:
 	
 	def __init__(self, notify,form=pyaudio.paInt16,chunk=1024,channels=1, 
-			shift_bytes=275, rate=16000):
+			shift_bytes=275, rate=48000):
 		self.notify = notify
+		if self.notify is None:	
+			print("Will not connect to RPi")
 		self.form = form
 		self.chunk = chunk
 		self.channels = channels
@@ -170,10 +174,10 @@ class Analyze:
 		'''
 		returns: all commands from database
 		'''
-		self.curr.execute("SELECT * from commands")
+		self.curr.execute("SELECT indx, command, func from commands")
 		self.commands = self.curr.fetchall()
 		self.commands = [i[0] for i in self.commands]
-
+		self.command_to_function = {i[1]: i[2] for i in self.commands}
 
 	def _find_best(self, user_command: str, n_jobs=5) -> (np.float64, str):
 		'''
@@ -202,11 +206,41 @@ class Analyze:
 		except Exception as e:
 			print(str(e))
 
-	def perform(self, command: str):
+	def _execute(self, query: str):
+		'''
+			Execute a query
+		'''
+		try:
+			self.cur.execute(query)
+		except sqlite3.Error as e:
+			print(str(e))
+
+	def _commit(self):
+		'''	
+			Commit to a database
+		'''
+		self.con.commit()
+
+	def _check_command(self, command):
+		'''
+			Checks the command during insertion if it already exists
+		'''
+		self._execute("select command from user_commands inner join commands where command = {}".format(command))
+		result = self.cursor.fetchall()
+		if result == []:
+			return False
+		return True
+
+	def perform(self, command: str, *args, **kwargs):
 		'''
 			Perform the given command 
 		'''
-		pass
+		function_name = self.command_to_function.get(command)
+		if function_name is None:
+			print("Unexpected error, wrong input command")
+			return
+		func = command.__dict__[function_name]
+		func(*args, **kwargs)
 
 	def wait_and_check(self):
 		'''
@@ -231,11 +265,43 @@ class Analyze:
 					self._send("Couldn't convert it into text! Can you repeat?")
 					continue
 				(distance, command) = self._find_best(text)
-				print("Closest command to {} {} {} is {} {} {} at a distance of {} {} {} ".format(colorama.Fore.GREEN, text, colorama.Style.RESET_ALL, colorama.Fore.RED, command, colorama.Style.RESET_ALL, colorama.Fore.YELLOW,  distance, colorama.Style.RESET_ALL))
-				#self.perform(command)
+				print("Closest command to {} {} {} is {} {} {} at a distance of {} {} {} ".format(
+						colorama.Fore.GREEN, text, colorama.Style.RESET_ALL, colorama.Fore.RED, command, 
+						colorama.Style.RESET_ALL, colorama.Fore.YELLOW,  distance, colorama.Style.RESET_ALL)
+				)
+
+				self.perform(command)
+
+	def command_add_command(self, function_name, file_name, command_name = ""):
+		'''
+		   Command: Add a new command
+		
+		   Special function that can add a function and a command
+		'''
+		if command_name == "":
+			assert function_name.startswith("command_"), "Enter command name or name the function as command_{command_name}"
+			command_name = function_name[len("command_"):] 
+		check = self._check_command(command_name)
+		if not check:
+			print("Command: {} is already present".format(command_name))
+		self._execute("insert into user_commands (command, func) values({}, {})".format(command_name, function_name))
+		self._commit()
+		self._retrieve_commands()
+
+	def command_remove_command(self, command_name):
+		'''
+		   Command: Add a new command
+		
+		   Special function that can add a function and a command
+		'''
+		self._execute("delete from user_commands where command = {}".format(command_name))
+		self._commit()
+		self._retrieve_commands()
+
+
 l = dir(Notify) + dir(Analyze)
 def hook(f, *_):
-        if True:#f.f_code.co_name in l and f.f_code.co_name != "__init__":
+        if f.f_code.co_name in l and f.f_code.co_name != "__init__":
                 print(f.f_code.co_name)
 import sys
 #sys.setprofile(hook)

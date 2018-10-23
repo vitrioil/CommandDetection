@@ -22,7 +22,7 @@ class Listen:
 	port = 30001
 	def __init__(self, form=pyaudio.paInt16,chunk=1024,channels=1,
 			shift_bytes=275, rate=16000, 
-			threshold=3500, silence_limit=1, prev_audio_limit = 0.5):
+			threshold=10000, silence_limit=1, prev_audio_limit = 0.5):
 		self.form = form
 		self.chunk = chunk
 		self.channels = channels
@@ -69,18 +69,19 @@ class Listen:
 			msg = self._receive()
 			print("\n", msg)
 
-	def save(self,remove=True,filename="test.wav"):
+	def save(self,filename="test.wav"):
 		'''
 		Save the wav file. 
 		'''
-		if self.saved or len(self.frames) == 0:
-			return
-		with wave.open(filename, 'wb') as wf:
-			wf.setnchannels(self.channels)
-			wf.setsampwidth(self.p.get_sample_size(self.form))
-			wf.setframerate(self.rate)
-			print("Saving bytes {}".format(len(self.frames)),end="\r")
-			wf.writeframes(b''.join(self.frames))
+		while True:
+			if self.saved or len(self.frames) == 0:
+				continue
+			with wave.open(filename, 'wb') as wf:
+				wf.setnchannels(self.channels)
+				wf.setsampwidth(self.p.get_sample_size(self.form))
+				wf.setframerate(self.rate)
+				print("Saving bytes {}".format(len(self.frames)),end="\r")
+				wf.writeframes(b''.join(self.frames))
 		print(f"Frames length is now {len(self.frames)}")
 		self.saved=True
 
@@ -106,7 +107,7 @@ class Listen:
 				if time.time() - last_time > 10:
 					last_time = time.time()
 					self.reset_save()
-				time.sleep(8)
+				time.sleep(10.1)
 			except KeyboardInterrupt as e:
 				print("Exception in stop()",str(e))
 				self.save()
@@ -156,7 +157,7 @@ class Listen:
 class Evaluate:
 	def __init__(self,listen_object):
 		self.sample = Sample(None,None,None,saved=True)
-		Tx,freq = 5511,101 
+		Tx,freq = self.sample.Tx, self.sample.freq
 		self.model = TModel(Tx,freq,*self.sample.load_dataset())
 		self.model.load_model()
 		self.listen_object = listen_object
@@ -166,11 +167,9 @@ class Evaluate:
 			predictions = self.model.detect_triggerword("test.wav")
 			if predictions is None:
 				self.listen_object.reset_save()
-				self.listen_object.save(remove=self.listen_object.closed)
 			else:
 				print("Got enough data resetting save",end="\r")
 				self.listen_object.reset_save()
-				self.listen_object.save()
 				predictions = np.squeeze(predictions)
 				continuous = 0
 				print("Total ones",np.sum(predictions))
@@ -195,12 +194,15 @@ def start_threads(l,e):
 	tStop = Thread(target=l.stop)
 	tSend = Thread(target=l.detected)
 	tReceive = Thread(target=l.receive) 
-	#tAnalyze = Thread(target=e.continuously_analyze)
+	tAnalyze = Thread(target=e.continuously_analyze)
+	tSave = Thread(target=l.save)
+
 	tRecord.start()
+	tSave.start()
 	tStop.start()
 	tSend.start()
 	tReceive.start()
-	#tAnalyze.start()
+	tAnalyze.start()
 
 li = list(dir(Listen)) + list(dir(Evaluate))
 def hook(f, *_):
