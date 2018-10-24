@@ -19,7 +19,7 @@ parser.add_argument("--add", help="When enabled will add a command")
 parser.add_argument("--remove", help="When enabled will remove a command")
 parser.add_argument("--filename", help="Filename where command is located") 
 parser.add_argument("--function", help="Function which is to be executed")
-parser.add_argument("--command-name", help="Command name to be added or removed")
+parser.add_argument("--command_name", help="Command name to be added or removed")
 parser.add_argument("--client", help="Run as client")
 parser.add_argument("--server", help="Run as server")
 args = parser.parse_args()
@@ -36,7 +36,7 @@ class Echo:
 			self.server()
 		if self.args.add and (self.args.filename and self.args.function):
 			self.analyze = Analyze(main_thread, None)
-			self.analyze.command_add_command(self.args.filename, self.args.function, self.args.command-name)
+			self.analyze.command_add_command(self.args.function, self.args.filename, self.args.command_name)
 
 		if self.args.remove and (self.args.command-name):
 			self.analyze = Analyze(main_thread, None)

@@ -176,10 +176,10 @@ class Analyze:
 		'''
 		retrieves all commands from database
 		'''
-		self.curr.execute("select indx, command, func from commands") 
+		self._execute("select indx, command, func from commands") 
 		self.commands_table = self.curr.fetchall()
 
-		self.curr.execute("select indx, command, func, file_name from user_commands") 
+		self._execute("select indx, command, func, file_name from user_commands") 
 		self.user_commands_table = self.curr.fetchall()
 
 		self.commands = [i[1] for i in self.commands_table]
@@ -220,7 +220,7 @@ class Analyze:
 			Execute a query
 		'''
 		try:
-			self.cur.execute(query)
+			self.curr.execute(query)
 		except sqlite3.Error as e:
 			print(str(e))
 
@@ -229,7 +229,7 @@ class Analyze:
 			Commit to a database
 		'''
 		try:
-			self.con.commit()
+			self.conn.commit()
 		except sqlite3.Error as e:
 			print(str(e))
 
@@ -237,8 +237,10 @@ class Analyze:
 		'''
 			Checks the command during insertion if it already exists
 		'''
-		self._execute("select command from user_commands union commands where command = {}".format(command))
-		result = self.cursor.fetchall()
+		self._execute("select command from commands where command = '{}'".format(command))
+		result = [i[0] for i in self.curr.fetchall()]
+		self._execute("select command from user_commands where command = '{}'".format(command)) 
+		result += [i[0] for i in self.curr.fetchall()]
 		if result == []:
 			return False
 		return True
@@ -296,13 +298,17 @@ class Analyze:
 		
 		   Special function that can add a function and a command
 		'''
-		if command_name == "":
+		if command_name == "" or command_name is None:
+			print(function_name)
 			assert function_name.startswith("command_"), "Enter command name or name the function as command_{command_name}"
 			command_name = function_name[len("command_"):] 
+		print("Checking for {}".format(command_name))
 		check = self._check_command(command_name)
-		if not check:
+		if check and check is not None:
 			print("Command: {} is already present".format(command_name))
-		self._execute("insert into user_commands (command, func) values({}, {})".format(command_name, function_name))
+			return
+		self._execute("insert into user_commands (command, func, file_name) values('{}', '{}', '{}')".format(command_name, function_name, file_name))
+		print("executed")
 		self._commit()
 		self._retrieve_commands()
 
