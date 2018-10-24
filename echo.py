@@ -1,6 +1,10 @@
 #!/bin/python3.7
 import sys
+import time
+import pyaudio
 import argparse
+import threading 
+from sample import Sample
 from evalVoiceData import Analyze, Notify
 from client_audio import Listen, Evaluate
 class StoreNameValuePair(argparse.Action):
@@ -27,38 +31,38 @@ class Echo:
 		if self.args.client:
 			self.client()
 		elif self.args.server:
-			self.notify = Notify()
-			self.analyze = Analyze(notify)
-		self.analyze = Analyze(None)
+			self.notify = Notify(main_thread)
+			self.analyze = Analyze(main_thread, self.notify)
+			self.server()
 		if self.args.add and (self.args.filename and self.args.function):
+			self.analyze = Analyze(main_thread, None)
 			self.analyze.command_add_command(self.args.filename, self.args.function, self.args.command-name)
 
 		if self.args.remove and (self.args.command-name):
+			self.analyze = Analyze(main_thread, None)
 			self.analyze.command_add_command(self.args.command-name)
 
 	def client(self):
 		form,channels,rate,chunk = pyaudio.paInt16, 1, 16000, 1024*2
 		
-		print("Initializing",end="\r")
+		print("Initializing...")
 		
 		self.listen = Listen(form,chunk,channels,rate)
 		self.evaluate = Evaluate(self.listen) 
 		
-		print("Done!      ")
+		print("Done!")
 		
-		start_threads(l,e)
+		print("Loading...")
 		
-		print("Creating and starting threads")
-		
-		tRecord = Thread(target=self.listen.record)
-		tStop = Thread(target=self.listen.stop)
-		tSend = Thread(target=self.listen.detected)
-		tReceive = Thread(target=self.listen.receive) 
-		tAnalyze = Thread(target=self.evaluate.continuously_analyze)
-		tSave = Thread(target=self.listen.save)
+		tRecord = threading.Thread(target=self.listen.record)
+		tStop = threading.Thread(target=self.listen.stop)
+		tSend = threading.Thread(target=self.listen.detected)
+		tReceive = threading.Thread(target=self.listen.receive) 
+		tAnalyze = threading.Thread(target=self.evaluate.continuously_analyze)
+		tSave = threading.Thread(target=self.listen.save)
 
 		tRecord.start()
-		tSave.start()
+		#tSave.start()
 		tStop.start()
 		tSend.start()
 		tReceive.start()
@@ -66,13 +70,18 @@ class Echo:
 
 
 	def server(self):
-		main_thread = threading.Condition()
-		main_thread.acquire()
 
 		t = threading.Thread(target=self.notify.acquire_and_notify)
 		t.start()
 		time.sleep(1)
 		self.analyze.wait_and_check()
 
+def hook(f, *_):
+	print(f.f_code.co_name)
+
+#sys.setprofile(hook)
+
 if __name__ == "__main__":
+	main_thread = threading.Condition()
+	main_thread.acquire()
 	echo = Echo(args)

@@ -30,7 +30,8 @@ def connect():
 class Notify:
 
 	ip_port = ("", 30001)
-	def __init__(self):
+	def __init__(self, main_thread):
+		self.main_thread = main_thread
 		self._connect()
 	
 	def _connect(self):
@@ -67,12 +68,12 @@ class Notify:
 		'''
 		while True:
 			try:
-				with main_thread:
+				with self.main_thread:
 					print("Acquired back again")
 					msg = self._recv()
 					print(msg[:3],"in acq and not")
 					print("Notifying")
-					main_thread.notify()
+					self.main_thread.notify()
 			except socket.error as se:
 				print("Socket error {}".format(se))
 				self._close()
@@ -85,9 +86,10 @@ class Notify:
 
 class Analyze:
 	
-	def __init__(self, notify,form=pyaudio.paInt16,chunk=1024,channels=1, 
-			shift_bytes=275, rate=48000):
+	def __init__(self, main_thread, notify,form=pyaudio.paInt16,chunk=1024,channels=1, 
+			shift_bytes=275, rate=16000):
 		self.notify = notify
+		self.main_thread = main_thread
 		if self.notify is None:	
 			print("Will not connect to RPi")
 		self.form = form
@@ -170,14 +172,21 @@ class Analyze:
 		except speech.UnknownValueError as e:
 			print(str(e))
 		return 	text
-	def _retrieve_commands(self) -> list:
+	def _retrieve_commands(self):
 		'''
-		returns: all commands from database
+		retrieves all commands from database
 		'''
-		self.curr.execute("SELECT indx, command, func from commands")
-		self.commands = self.curr.fetchall()
-		self.commands = [i[0] for i in self.commands]
-		self.command_to_function = {i[1]: i[2] for i in self.commands}
+		self.curr.execute("select indx, command, func from commands") 
+		self.commands_table = self.curr.fetchall()
+
+		self.curr.execute("select indx, command, func, file_name from user_commands") 
+		self.user_commands_table = self.curr.fetchall()
+
+		self.commands = [i[1] for i in self.commands_table]
+		self.commands.extend([i[1] for i in self.user_commands_table])
+
+		self.command_to_function = {i[1]: i[2] for i in self.commands_table}
+		self.user_command_to_functon = {i[1]: (i[2], i[3]) for i in self.user_commands_table}
 
 	def _find_best(self, user_command: str, n_jobs=5) -> (np.float64, str):
 		'''
@@ -219,13 +228,16 @@ class Analyze:
 		'''	
 			Commit to a database
 		'''
-		self.con.commit()
+		try:
+			self.con.commit()
+		except sqlite3.Error as e:
+			print(str(e))
 
 	def _check_command(self, command):
 		'''
 			Checks the command during insertion if it already exists
 		'''
-		self._execute("select command from user_commands inner join commands where command = {}".format(command))
+		self._execute("select command from user_commands union commands where command = {}".format(command))
 		result = self.cursor.fetchall()
 		if result == []:
 			return False
@@ -236,10 +248,16 @@ class Analyze:
 			Perform the given command 
 		'''
 		function_name = self.command_to_function.get(command)
+		file_name = "command"
 		if function_name is None:
-			print("Unexpected error, wrong input command")
-			return
-		func = command.__dict__[function_name]
+			f = self.user_command_to_functon.get(command)
+			if f is None: 
+				print("Unexpected error, wrong input command")
+				return
+			function_name, file_name  = f
+		print("\nLoading {} for {}".format(file_name, function_name))
+		lib = importlib.import_module(file_name)
+		func = lib.__dict__[function_name]
 		func(*args, **kwargs)
 
 	def wait_and_check(self):
@@ -247,8 +265,8 @@ class Analyze:
 			function which wakes up when command is given to the user 
 		'''
 		while True:
-			with main_thread:
-				main_thread.wait()
+			with self.main_thread:
+				self.main_thread.wait()
 				print("Notified")
 				msg = self._get_from_raspberry()
 				if len(msg) == 0:
@@ -309,8 +327,8 @@ if __name__ == "__main__":
 	main_thread = threading.Condition()
 	main_thread.acquire()
 
-	notify  = Notify()
-	analyze = Analyze(notify)
+	notify  = Notify(main_thread)
+	analyze = Analyze(main_thread, notify)
 	t = threading.Thread(target=notify.acquire_and_notify)
 	t.start()
 	time.sleep(1)	

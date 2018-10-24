@@ -13,8 +13,8 @@ import pyaudio
 import collections
 import numpy as np
 from queue import Queue
-#from model import TModel
-#from sample import Sample
+from model import TModel
+from sample import Sample
 from threading import Thread
 
 class Listen:
@@ -157,13 +157,13 @@ class Listen:
 class Evaluate:
 	def __init__(self,listen_object):
 		self.sample = Sample(None,None,None,saved=True)
-		Tx,freq = self.sample.Tx, self.sample.freq
-		self.model = TModel(Tx,freq,*self.sample.load_dataset())
-		self.model.load_model()
+		Tx,coeff = self.sample.Tx, self.sample.coeff
+		#self.model = TModel(Tx,coeff, "../dataset.h5")
 		self.listen_object = listen_object
 
 	def continuously_analyze(self):
 		while len(self.listen_object.frames) != 0:
+			continue
 			predictions = self.model.detect_triggerword("test.wav")
 			if predictions is None:
 				self.listen_object.reset_save()
@@ -194,15 +194,16 @@ def start_threads(l,e):
 	tStop = Thread(target=l.stop)
 	tSend = Thread(target=l.detected)
 	tReceive = Thread(target=l.receive) 
-	tAnalyze = Thread(target=e.continuously_analyze)
-	tSave = Thread(target=l.save)
+	#tAnalyze = Thread(target=e.continuously_analyze)
+	#tSave = Thread(target=l.save)
 
 	tRecord.start()
-	tSave.start()
+	#tSave.start()
 	tStop.start()
 	tSend.start()
 	tReceive.start()
-	tAnalyze.start()
+	#tAnalyze.start()
+	
 
 li = list(dir(Listen)) + list(dir(Evaluate))
 def hook(f, *_):
@@ -216,7 +217,7 @@ if __name__ == "__main__":
 	form,channels,rate,chunk = pyaudio.paInt16, 1, 16000, 1024*2
 	print("Initializing",end="\r")
 	l = Listen(form,chunk,channels,rate)
-	e = None#Evaluate(l) 
+	e = Evaluate(l) 
 	print("Done!	  ")
 	start_threads(l,e)
 	#l.send_command()

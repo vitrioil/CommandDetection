@@ -24,9 +24,4 @@ def make_stereo(file1, output):
     ofile.close()
 if __name__ == "__main__":
 	model = TModel(1999, 20, "dataset.h5", saved = True)
-	model.detect_triggerword(f"{sys.argv[1]}", plot_graph = True)
-	assert False
-	for i in range(800):
-		y = model.detect_triggerword(f"../data/Training/raw/train{i}.wav", plot_graph = False)
-		if np.sum(y) != 0:
-			print(i,end=" ")
+	model.detect_triggerword(int(sys.argv[2]), f"{sys.argv[1]}", plot_graph = True)

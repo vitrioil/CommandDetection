@@ -18,20 +18,22 @@ with open("hype.yaml") as f:
 hyper_param = hype["hyper"]
 
 class TModel:
-	def __init__(self, Tx, freq, path, saved = True):
+	def __init__(self, Tx, coeff, path, saved = True):
 		self.load_hyper_parameters()
 		self.Tx = Tx
-		self.freq = freq
+		self.coeff = coeff
 		self.saved = saved
 		if self.saved:
-			self.load_model()
-		self.file = h5py.File(path, 'r')
+			pass#self.load_model()
+		self.file = h5py.File(path)
 		self.training = self.file["training"]
 		self.test = self.file["test"]
 		self.X_train = self.training["X_train"]
 		self.Y_train = self.training["Y_train"]
 		self.X_test = self.test["X_test"]
 		self.Y_test = self.test["Y_test"]
+		np.random.shuffle(self.X_train)
+		np.random.shuffle(self.Y_train) 
 		self.X_val = self.X_train[int(self.val_split*self.X_train.shape[0]):,...]
 		self.Y_val = self.Y_train[int(self.val_split*self.Y_train.shape[0]):,...]
 		self.X_train = self.X_train[:int(self.val_split*self.X_train.shape[0]), ...]
@@ -69,10 +71,17 @@ class TModel:
 		X = Activation("relu")(X)
 		X = Dropout(0.15)(X)
 
-		X = GRU(50, return_sequences=True)(X)
+		X = LSTM(10, return_sequences=True)(X)
 		X = BatchNormalization()(X)
-		X = Activation("relu")(X)
-		X = Dropout(0.1)(X)
+		X = Activation("tanh")(X)
+
+		X = LSTM(10, return_sequences=True)(X)
+		X = BatchNormalization()(X)
+		X = Activation("tanh")(X)
+
+		X = LSTM(10, return_sequences=True)(X)
+		X = BatchNormalization()(X)
+		X = Activation("tanh")(X)
 
 		X = TimeDistributed(Dense(2,activation="softmax"))(X)
 
@@ -83,7 +92,8 @@ class TModel:
 		if self.saved:
 			self.load_model()
 		else:
-			self.model = self.makeModel((self.Tx,self.freq))
+			self.model = self.makeModel((self.Tx,self.coeff))
+		self.graph = tf.get_default_graph()
 		print(self.model.summary())
 		opt = keras.optimizers.__dict__[self.optimizer]
 		self.model.compile(opt(lr=self.lr),loss=self.loss,metrics=[m for m in self.metrics])
@@ -93,19 +103,21 @@ class TModel:
 					callbacks = [keras.callbacks.TensorBoard(log_dir=self.logdir, histogram_freq = 1)])
 		except KeyboardInterrupt as e:
 			print(str(e))
-		self.model.save("../data/Model/model.h5")
+		self.model.save("../data/Model/model2.h5")
 		loss,acc = self.model.evaluate(self.X_test,self.Y_test,batch_size=self.batch_size)
 		print(f"Testing accuracy {acc}")
 		print(f"Testing loss {loss}")
+		self.detect_triggerword(0, "../data/Training/raw/train0.wav", plot_graph = True)
 
 	def load_model(self):
 		print("Loading model")
-		self.model = keras.models.load_model("../data/Model/model.h5")
+		self.model = keras.models.load_model("../data/Model/model2.h5")
 		self.graph = tf.get_default_graph()
 		print("Loaded")
 
-	def detect_triggerword(self,filename,plot_graph=False):
-		x = Sample.calc_mfcc(filename)
+	def detect_triggerword(self, i, filename, plot_graph=False):
+		#x = Sample.calc_mfcc(filename)
+		x =  self.X_train[i]
 		if x.shape[0] >= 1999:
 			x = x[:1999, :]
 		else:
@@ -113,13 +125,15 @@ class TModel:
 			return
 		if len(x.shape) < 3:
 			x = x[np.newaxis,...]
-		y = self.model.predict(x)
+		with self.graph.as_default():
+			y = self.model.predict(x)
 		y = np.argmax(np.squeeze(y), axis = 1)
 		if plot_graph:
-			plt.subplot(2, 1, 1)
+			plt.subplot(3, 1, 1)
 			_ = graph_spectrogram(filename)
-			plt.subplot(2, 1, 2)
+			plt.subplot(3, 1, 2)
 			plt.plot(y)
+			plt.subplot(3, 1, 3)
+			plt.plot(np.argmax(np.squeeze(self.Y_train[i]), axis = 1))
 			plt.show()
-
 		return y

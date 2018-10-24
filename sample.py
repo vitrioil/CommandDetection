@@ -344,7 +344,7 @@ if __name__ == '__main__':
 	pos = [os.path.join("../data/Pos/",name) for name in names]
 	neg = [os.path.join("../data/Neg/"+name) for name in names]
 	bg = ["../data/BG/"]
-	s = Sample(pos,neg,bg,train_size=800,test_size=200)
+	s = Sample(pos,neg,bg,train_size=400,test_size=200)
 	with s:
 		s.make_data_set()
 
