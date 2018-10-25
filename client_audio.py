@@ -15,10 +15,10 @@ import numpy as np
 from queue import Queue
 from model import TModel
 from sample import Sample
-from threading import Thread
+from threading import Thread, Lock
 
 class Listen:
-	host = "192.168.0.108"
+	host = "172.18.39.87"
 	port = 30001
 	def __init__(self, form=pyaudio.paInt16,chunk=1024,channels=1,
 			shift_bytes=275, rate=16000, 
@@ -36,6 +36,7 @@ class Listen:
 		self.s.connect((self.host, self.port))
 		self.q = Queue()
 		self.p = pyaudio.PyAudio()
+		self.saving = Lock()
 		self.stream = self.p.open(format=self.form,
 					channels = self.channels,
 					rate = self.rate,
@@ -74,16 +75,17 @@ class Listen:
 		Save the wav file. 
 		'''
 		while True:
-			if self.saved or len(self.frames) == 0:
-				continue
-			with wave.open(filename, 'wb') as wf:
-				wf.setnchannels(self.channels)
-				wf.setsampwidth(self.p.get_sample_size(self.form))
-				wf.setframerate(self.rate)
-				print("Saving bytes {}".format(len(self.frames)),end="\r")
-				wf.writeframes(b''.join(self.frames))
-		print(f"Frames length is now {len(self.frames)}")
-		self.saved=True
+			with self.saving:
+				if self.saved or len(self.frames) == 0:
+					continue
+				with wave.open(filename, 'wb') as wf:
+					wf.setnchannels(self.channels)
+					wf.setsampwidth(self.p.get_sample_size(self.form))
+					wf.setframerate(self.rate)
+					print("Saving bytes {}".format(len(self.frames)),end="\r")
+					wf.writeframes(b''.join(self.frames))
+				print(f"Frames length is now {len(self.frames)}")
+				self.saved=True
 
 	def reset_save(self):
 		self.saved = False
@@ -93,8 +95,10 @@ class Listen:
 
 	def record(self):
 		while True:
-			self.frames.append(self.stream_record())
-			print(f"Recording {len(self.frames)}", end="\r")
+			with self.saving:	
+				data = self.stream_record()
+				self.frames.append(data)
+				print(f"Recording {len(self.frames)}", end="\r")
 
 	def stop(self):
 		'''

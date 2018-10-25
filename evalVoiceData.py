@@ -302,6 +302,7 @@ class Analyze:
 			print(function_name)
 			assert function_name.startswith("command_"), "Enter command name or name the function as command_{command_name}"
 			command_name = function_name[len("command_"):] 
+			command_name = " ".join(command_name.split('_'))
 		print("Checking for {}".format(command_name))
 		check = self._check_command(command_name)
 		if check and check is not None:
@@ -318,7 +319,8 @@ class Analyze:
 		
 		   Special function that can add a function and a command
 		'''
-		self._execute("delete from user_commands where command = {}".format(command_name))
+		print("Deleting {}".format(command_name))
+		self._execute("delete from user_commands where command = '{}'".format(command_name))
 		self._commit()
 		self._retrieve_commands()
 

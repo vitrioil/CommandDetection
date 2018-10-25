@@ -38,9 +38,9 @@ class Echo:
 			self.analyze = Analyze(main_thread, None)
 			self.analyze.command_add_command(self.args.function, self.args.filename, self.args.command_name)
 
-		if self.args.remove and (self.args.command-name):
+		if self.args.remove and (self.args.command_name):
 			self.analyze = Analyze(main_thread, None)
-			self.analyze.command_add_command(self.args.command-name)
+			self.analyze.command_remove_command(self.args.command_name)
 
 	def client(self):
 		form,channels,rate,chunk = pyaudio.paInt16, 1, 16000, 1024*2
@@ -62,7 +62,7 @@ class Echo:
 		tSave = threading.Thread(target=self.listen.save)
 
 		tRecord.start()
-		#tSave.start()
+		tSave.start()
 		tStop.start()
 		tSend.start()
 		tReceive.start()

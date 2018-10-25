@@ -24,7 +24,7 @@ class TModel:
 		self.coeff = coeff
 		self.saved = saved
 		if self.saved:
-			pass#self.load_model()
+			self.load_model()
 		self.file = h5py.File(path)
 		self.training = self.file["training"]
 		self.test = self.file["test"]
@@ -32,8 +32,6 @@ class TModel:
 		self.Y_train = self.training["Y_train"]
 		self.X_test = self.test["X_test"]
 		self.Y_test = self.test["Y_test"]
-		np.random.shuffle(self.X_train)
-		np.random.shuffle(self.Y_train) 
 		self.X_val = self.X_train[int(self.val_split*self.X_train.shape[0]):,...]
 		self.Y_val = self.Y_train[int(self.val_split*self.Y_train.shape[0]):,...]
 		self.X_train = self.X_train[:int(self.val_split*self.X_train.shape[0]), ...]
@@ -73,15 +71,15 @@ class TModel:
 
 		X = LSTM(10, return_sequences=True)(X)
 		X = BatchNormalization()(X)
-		X = Activation("tanh")(X)
+		X = Activation("relu")(X)
 
 		X = LSTM(10, return_sequences=True)(X)
 		X = BatchNormalization()(X)
-		X = Activation("tanh")(X)
+		X = Activation("relu")(X)
 
 		X = LSTM(10, return_sequences=True)(X)
 		X = BatchNormalization()(X)
-		X = Activation("tanh")(X)
+		X = Activation("relu")(X)
 
 		X = TimeDistributed(Dense(2,activation="softmax"))(X)
 
@@ -103,7 +101,7 @@ class TModel:
 					callbacks = [keras.callbacks.TensorBoard(log_dir=self.logdir, histogram_freq = 1)])
 		except KeyboardInterrupt as e:
 			print(str(e))
-		self.model.save("../data/Model/model2.h5")
+		self.model.save("../data/Model/model3.h5")
 		loss,acc = self.model.evaluate(self.X_test,self.Y_test,batch_size=self.batch_size)
 		print(f"Testing accuracy {acc}")
 		print(f"Testing loss {loss}")
@@ -111,7 +109,7 @@ class TModel:
 
 	def load_model(self):
 		print("Loading model")
-		self.model = keras.models.load_model("../data/Model/model2.h5")
+		self.model = keras.models.load_model("../data/Model/model3.h5")
 		self.graph = tf.get_default_graph()
 		print("Loaded")
 
