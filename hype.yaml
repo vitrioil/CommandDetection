@@ -1,0 +1,10 @@
+hyper:
+    lr: 5e-4
+    epochs: 50000
+    batch_size: 32
+    optimizer: "RMSprop"
+    logdir: "logdir"
+    val_split: 0.75 # training: 75% validation: 25%
+    loss: "categorical_crossentropy"
+    metrics:
+        - "categorical_accuracy"

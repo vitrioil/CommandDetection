@@ -1,17 +1,31 @@
 import wave
 import time
+import pickle
 import socket
 import audioop
-import command
 import pyaudio
 import sqlite3
 import colorama
 import threading
+import importlib
 import numpy as np
-from command import *
 from customWMD import WMD,WordNotFound
 import speech_recognition as speech
 from sklearn.externals.joblib import Parallel, delayed
+
+if __name__ == "__main__":
+	from command import *
+	import command
+
+class StopEchoException(Exception):
+	
+	def __init__(self, msg, error=""):
+		super().__init__(msg)
+		self.msg = msg
+		self.error = error
+
+	def __str__(self):
+		return str(self.msg)
 
 def _find_command(wmd, user_command, command):
 	distance = wmd.wmd(user_command, command)
@@ -33,7 +47,11 @@ class Notify:
 	def __init__(self, main_thread):
 		self.main_thread = main_thread
 		self._connect()
-	
+		self.closed = False
+
+	def set_analyze(self, analyze):
+		self.analyze = analyze
+
 	def _connect(self):
 		self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -66,7 +84,7 @@ class Notify:
 			Assuming for now msg starting with `RPi`
 			means RPi has detected a trigger word
 		'''
-		while True:
+		while not self.closed:
 			try:
 				with self.main_thread:
 					print("Acquired back again")
@@ -83,6 +101,9 @@ class Notify:
 				print(str(e))
 				self._close()
 			time.sleep(1)
+	
+	def close_server(self):
+		self.closed = True
 
 class Analyze:
 	
@@ -103,6 +124,8 @@ class Analyze:
 		self.wmd = WMD()
 		self.p = pyaudio.PyAudio()
 		self._retrieve_commands()
+		with open("words.pickle", 'rb') as f:
+			self.words = pickle.load(f)
 
 	def _get_from_raspberry(self) -> str:
 		'''
@@ -172,6 +195,7 @@ class Analyze:
 		except speech.UnknownValueError as e:
 			print(str(e))
 		return 	text
+
 	def _retrieve_commands(self):
 		'''
 		retrieves all commands from database
@@ -245,6 +269,20 @@ class Analyze:
 			return False
 		return True
 
+	def _check_vocab(self, word):
+		vocab_len = len(self.words)
+		low, mid, high = 0, len(self.words) // 2, vocab_len 
+		while low <= high:
+			mid = (low + high) // 2
+			if word == self.words[mid]:
+				return True
+			elif word < self.words[mid]:
+				high = mid - 1
+			else:
+				low = mid + 1
+			print(vocab_len, mid, end="\r")
+		return False
+
 	def perform(self, command: str, *args, **kwargs):
 		'''
 			Perform the given command 
@@ -260,13 +298,20 @@ class Analyze:
 		print("\nLoading {} for {}".format(file_name, function_name))
 		lib = importlib.import_module(file_name)
 		func = lib.__dict__[function_name]
-		func(*args, **kwargs)
-
+		try:
+			output = func(*args, **kwargs)
+			self._send(output)
+		except StopEchoException as e:
+			print(str(e))
+			self.close_server()
+		except Exception as e:
+			print(str(e))
+		
 	def wait_and_check(self):
 		'''
 			function which wakes up when command is given to the user 
 		'''
-		while True:
+		while not self.notify.closed:
 			with self.main_thread:
 				self.main_thread.wait()
 				print("Notified")
@@ -291,18 +336,26 @@ class Analyze:
 				)
 
 				self.perform(command)
-
+	
 	def command_add_command(self, function_name, file_name, command_name = ""):
 		'''
 		   Command: Add a new command
 		
 		   Special function that can add a function and a command
 		'''
+		if file_name.endswith(".py"):
+			file_name = file_name[:len(".py")]
 		if command_name == "" or command_name is None:
 			print(function_name)
 			assert function_name.startswith("command_"), "Enter command name or name the function as command_{command_name}"
 			command_name = function_name[len("command_"):] 
 			command_name = " ".join(command_name.split('_'))
+		for word in command_name.split():
+			if not self._check_vocab(word):
+				print("Word {} not in vocab".format(word))
+				print("Failed to add the command")
+				return
+
 		print("Checking for {}".format(command_name))
 		check = self._check_command(command_name)
 		if check and check is not None:
@@ -312,6 +365,7 @@ class Analyze:
 		print("executed")
 		self._commit()
 		self._retrieve_commands()
+		print(self.user_command_to_functon)
 
 	def command_remove_command(self, command_name):
 		'''
@@ -323,6 +377,17 @@ class Analyze:
 		self._execute("delete from user_commands where command = '{}'".format(command_name))
 		self._commit()
 		self._retrieve_commands()
+		print(self.user_command_to_functon)
+	
+	def close_server(self):
+		self._send("shutdown")
+		self.curr.close()
+		self.conn.close()
+		self.p.terminate()
+		try:
+			self.notify.close_server()
+		except Exception as e:
+			print(str(e))
 
 
 l = dir(Notify) + dir(Analyze)

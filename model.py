@@ -5,6 +5,7 @@ import numpy as np
 #from td_utils import *
 import tensorflow as tf
 from sample import Sample
+from scipy.io import wavfile
 import matplotlib.pyplot as plt
 from keras.callbacks import ModelCheckpoint
 from keras.optimizers import Adam,Nadam,RMSprop
@@ -18,14 +19,15 @@ with open("hype.yaml") as f:
 hyper_param = hype["hyper"]
 
 class TModel:
-	def __init__(self, Tx, coeff, path, saved = True):
+	def __init__(self, Tx, coeff, path, load_model_flag = True, load_data_flag = True):
 		self.load_hyper_parameters()
 		self.Tx = Tx
 		self.coeff = coeff
-		self.saved = saved
-		if self.saved:
-			pass#self.load_model()
-		else:
+		self.load_model_flag = load_model_flag
+		self.load_data_flag = load_data_flag
+		if self.load_model:
+			self.load_model()
+		if self.load_data_flag:
 			self.load_data(path)
 
 	def load_data(self, path):
@@ -92,7 +94,7 @@ class TModel:
 		return model
 
 	def train(self):
-		if self.saved:
+		if self.load_model_flag:
 			self.load_model()
 		else:
 			self.model = self.makeModel((self.Tx,self.coeff))
@@ -117,7 +119,23 @@ class TModel:
 		self.model = keras.models.load_model("../data/Model/model3.h5")
 		self.graph = tf.get_default_graph()
 		print("Loaded")
-
+	
+	def get_wav_info(wav_file): 
+		rate, data = wavfile.read(wav_file) 
+		return rate, data 	
+	
+	def graph_spectrogram(wav_file):
+		rate, data = TModel.get_wav_info(wav_file)
+		nfft = 200 # Length of each window segment
+		fs = 8000 # Sampling frequencies
+		noverlap = 120 # Overlap between windows
+		nchannels = data.ndim
+		if nchannels == 1:
+		  pxx = plt.specgram(data, nfft, fs, noverlap = noverlap)[0]
+		elif nchannels == 2:
+		  pxx = plt.specgram(data[:,0], nfft, fs, noverlap = noverlap)[0]
+		return pxx[:,:5511]
+	
 	def detect_triggerword(self, i, filename, plot_graph=False):
 		#x = Sample.calc_mfcc(filename)
 		x =  self.X_train[i]
@@ -133,7 +151,7 @@ class TModel:
 		y = np.argmax(np.squeeze(y), axis = 1)
 		if plot_graph:
 			plt.subplot(3, 1, 1)
-			_ = graph_spectrogram(filename)
+			_ = TModel.graph_spectrogram(filename)
 			plt.subplot(3, 1, 2)
 			plt.plot(y)
 			plt.subplot(3, 1, 3)
