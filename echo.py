@@ -58,7 +58,7 @@ class Echo:
 		tStop = threading.Thread(target=self.listen.stop)
 		tSend = threading.Thread(target=self.listen.detected)
 		tReceive = threading.Thread(target=self.listen.receive) 
-		tAnalyze = threading.Thread(target=self.evaluate.continuously_analyze)
+		#tAnalyze = threading.Thread(target=self.evaluate.continuously_analyze)
 		tSave = threading.Thread(target=self.listen.save)
 
 		tRecord.start()
@@ -66,7 +66,7 @@ class Echo:
 		tStop.start()
 		tSend.start()
 		tReceive.start()
-		tAnalyze.start()
+		#tAnalyze.start()
 
 
 	def server(self):

@@ -2,7 +2,7 @@ import yaml
 import h5py
 import keras
 import numpy as np
-from td_utils import *
+#from td_utils import *
 import tensorflow as tf
 from sample import Sample
 import matplotlib.pyplot as plt
@@ -24,7 +24,11 @@ class TModel:
 		self.coeff = coeff
 		self.saved = saved
 		if self.saved:
-			self.load_model()
+			pass#self.load_model()
+		else:
+			self.load_data(path)
+
+	def load_data(self, path):
 		self.file = h5py.File(path)
 		self.training = self.file["training"]
 		self.test = self.file["test"]
@@ -41,7 +45,8 @@ class TModel:
 		if self.Y_test.shape[-1] != 2:
 			self.Y_test = keras.utils.to_categorical(self.Y_test,num_classes=2)
 		self.check_skewness()
-	
+		
+
 	def load_hyper_parameters(self):
 		self.val_split = hyper_param["val_split"]
 		self.lr = float(hyper_param["lr"])
