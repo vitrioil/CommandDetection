@@ -108,7 +108,7 @@ class Notify:
 class Analyze:
 	
 	def __init__(self, main_thread, notify,form=pyaudio.paInt16,chunk=1024,channels=1, 
-			shift_bytes=275, rate=16000):
+			shift_bytes=275, rate=48000):
 		self.notify = notify
 		self.main_thread = main_thread
 		if self.notify is None:	
@@ -344,7 +344,7 @@ class Analyze:
 		   Special function that can add a function and a command
 		'''
 		if file_name.endswith(".py"):
-			file_name = file_name[:len(".py")]
+			file_name = file_name[:-len(".py")]
 		if command_name == "" or command_name is None:
 			print(function_name)
 			assert function_name.startswith("command_"), "Enter command name or name the function as command_{command_name}"
