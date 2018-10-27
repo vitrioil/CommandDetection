@@ -13,7 +13,7 @@ import pyaudio
 import collections
 import numpy as np
 from queue import Queue
-from model import TModel
+#from model import TModel
 from sample import Sample
 from threading import Thread, Lock
 import speech_recognition as speech
@@ -53,7 +53,9 @@ class Listen:
 
 	def __exit__(self):
 		self.close_client()
+
 	def _send(self, msg):
+		print("Sending {}".format(msg[:10]))
 		if isinstance(msg, str):
 			msg = msg.encode()
 		self.s.send(msg)
@@ -99,9 +101,12 @@ class Listen:
 	def record(self):
 		while not self.closed:
 			with self.saving:	
-				data = self.stream_record()
-				self.frames.append(data)
-				print(f"Recording {len(self.frames)}", end="\r")
+				try:
+					data = self.stream_record()
+					self.frames.append(data)
+					print(f"Recording {len(self.frames)}", end="\r")
+				except Exception as e:
+					print(str(e))
 		self.close_client()
 
 	def stop(self):
@@ -147,6 +152,8 @@ class Listen:
 			except audioop.error as e:
 				print(str(e))
 				return None
+			except AssertionError as e:
+				print(str(e))
 		return audio
   
 	def _convert_to_text(self, audio: speech.AudioData) -> str:
@@ -160,6 +167,9 @@ class Listen:
 			text = self.recognizer.recognize_google(audio)
 		except speech.UnknownValueError as e:
 			print(str(e))
+		except AssertionError as e:
+			print(str(e))
+		print("returning text")
 		return  text	
 	
 	def convert_to_text(self, data):
@@ -169,15 +179,15 @@ class Listen:
 
 	def detected(self):
 		while True:
+			print("Say echo to proceed")
 			data = self.listen_for_command(send = False)
 			text = self.convert_to_text(data)
-			print("\n", text, end='\r')
-			if text.lower() == "echo":
+			print("\n", text)
+			if text.strip().lower() == "echo":
 				print("Detected a trigger word")
 				self.frames.clear()
 				self.send_command()
 				self.trigger = False
-			time.sleep(2)
 
 
 	def send_command(self):
@@ -201,12 +211,14 @@ class Listen:
 			current_audio = self.frames.pop()#self.stream_record()
 			check_thresh.append(np.sqrt(np.abs(audioop.avg(current_audio, 4))))
 			val = sum([i>self.threshold for i in check_thresh]) 
+			print(val, end='\r')
 			if val > 0:
 				audio2send.append(current_audio)
 				started = True
 			elif started:
-				msg = b"Command " + b"".join(list(prev_audio) + audio2send)
+				msg = b"".join(list(prev_audio) + audio2send)
 				if send:
+					msg = b"Command " + msg
 					self._send(msg)
 					self._send(b"End")
 					break
@@ -260,8 +272,9 @@ class Evaluate:
 						self.listen_object.send_command()
 						continuous = 0
 			time.sleep(2)
-
+tRecord = None
 def start_threads(l,e):
+	global tRecord
 	print("Creating and starting threads")
 	tRecord = Thread(target=l.record)
 	tStop = Thread(target=l.stop)
