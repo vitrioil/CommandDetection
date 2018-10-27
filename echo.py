@@ -4,7 +4,6 @@ import time
 import pyaudio
 import argparse
 import threading 
-from sample import Sample
 from evalVoiceData import Analyze, Notify
 from client_audio import Listen, Evaluate
 class StoreNameValuePair(argparse.Action):
@@ -48,7 +47,7 @@ class Echo:
 		print("Initializing...")
 		
 		self.listen = Listen(form,chunk,channels,rate)
-		self.evaluate = Evaluate(self.listen) 
+		#self.evaluate = Evaluate(self.listen) 
 		
 		print("Done!")
 		
@@ -59,10 +58,10 @@ class Echo:
 		tSend = threading.Thread(target=self.listen.detected)
 		tReceive = threading.Thread(target=self.listen.receive) 
 		#tAnalyze = threading.Thread(target=self.evaluate.continuously_analyze)
-		tSave = threading.Thread(target=self.listen.save)
+		#tSave = threading.Thread(target=self.listen.save)
 
 		tRecord.start()
-		tSave.start()
+		#tSave.start()
 		tStop.start()
 		tSend.start()
 		tReceive.start()

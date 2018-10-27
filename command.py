@@ -1,3 +1,4 @@
+import sqlite3
 import datetime
 import requests
 import importlib
@@ -9,7 +10,6 @@ news_websites = "http://timesofindia.indiatimes.com"
 #os.system("weather mumbai --u c")
 
 lib = importlib.import_module("test_dict")
-print(dir(lib))
 def command_weather(loc = "mumbai", day = 1):
 	'''
 		Command: Show me the current weather
@@ -26,32 +26,10 @@ def command_weather(loc = "mumbai", day = 1):
 	forecast = location.forecast
 
 	for f in forecast[:day]:
-		output += "Forecast for " + str(f.date) + " is " + f.text
-		output += "\n"
-		output += f.low
-		output += "\n"
-		output += f.high
+		output += "Forecast for " + str(f.date) + " is " + f.text + '\n'
+		output += f.low + '\n'
+		output += f.high + '\n'
 		output += "="*10
-		output += "\n"
-	return output
-
-def command_scrape_from_toi():
-	'''
-		Command: Show me top news of the day
-
-		Shows top news from Times of India
-	'''
-	output = ""
-	page = requests.get(news_websites)
-
-	soup = BS(page.content, "html.parser")
-
-	news = soup.find(class_ = 'top-story')
-	list_of_headlines = news.find_all("li")
-
-	for indx, news in enumerate(list_of_headlines):
-		headline = news.find('a')
-		output += indx + " ==> " + headline.text
 		output += "\n"
 	return output
 
@@ -66,8 +44,6 @@ def command_show_time():
 	output += "\n\n"
 	return output
 
-def command_increase_volume():
-	pass
 
 def command_good_morning():
 	output = ""
@@ -81,16 +57,31 @@ def command_good_morning():
 	return output
 
 def command_show_all_commands():
-	output += "\n\nPredefined commands are:"+"\n"
-	for i in dir():
-		if i.startswith("command"):
-			output += i[len("command_"):]
-			output += '-'*20
-			output += '\n'
-	return output
+	output = ""
+	try:
+		con = sqlite3.connect("Commands.db")
+		cur = con.cursor()
+	except Exception as e:
+		print(str(e))
 
-def command_reminders():
-	pass
+	cur.execute("select command from commands")
+	output += "Predefined commands" + '\n'
+	commands = [i[0] for i in cur.fetchall()]
+	for c in commands:
+		output += c + '\n'
+
+	output += '\n'
+	cur.execute("select command from user_commands")
+	output += "User defined commands" + '\n'
+	commands = [i[0] for i in cur.fetchall()]
+	for c in commands:
+		output += c + '\n'
+	try:
+		cur.close()
+		con.close()
+	except Exception as e:
+		print(str(e))
+	return output
 
 def command_goodbye():
 	output = "\n\nGoodbye!\n\n"

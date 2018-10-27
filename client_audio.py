@@ -13,8 +13,6 @@ import pyaudio
 import collections
 import numpy as np
 from queue import Queue
-#from model import TModel
-from sample import Sample
 from threading import Thread, Lock
 import speech_recognition as speech
 
@@ -23,7 +21,7 @@ class Listen:
 	port = 30001
 	def __init__(self, form=pyaudio.paInt16,chunk=1024,channels=1,
 			shift_bytes=275, rate=16000, 
-			threshold=10000, silence_limit=1, prev_audio_limit = 0.5):
+			threshold=9000, silence_limit=1, prev_audio_limit = 0.5):
 		self.form = form
 		self.chunk = chunk
 		self.channels = channels
@@ -181,7 +179,7 @@ class Listen:
 		while True:
 			print("Say echo to proceed")
 			data = self.listen_for_command(send = False)
-			text = self.convert_to_text(data)
+			text ="echo"# self.convert_to_text(data)
 			print("\n", text)
 			if text.strip().lower() == "echo":
 				print("Detected a trigger word")
